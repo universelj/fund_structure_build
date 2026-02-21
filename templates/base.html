@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}基金结构图生成{% endblock %}</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #FAF9F7;
+            --bg-secondary: #FFFFFF;
+            --bg-tertiary: #F5F4F2;
+            --accent: #DA7756;
+            --accent-hover: #C96A4A;
+            --text-primary: #1A1A1A;
+            --text-secondary: #666666;
+            --text-muted: #999999;
+            --border: #E5E5E5;
+            --border-light: #EEEEEE;
+            --success: #16A34A;
+            --error: #DC2626;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        /* 顶部导航 */
+        .navbar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar h1 {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .navbar-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.15s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            border-color: var(--text-muted);
+            background: var(--bg-tertiary);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            border-color: var(--accent-hover);
+        }
+
+        .btn-success {
+            background: var(--success);
+            border-color: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #15803D;
+            border-color: #15803D;
+        }
+
+        /* 主内容区 */
+        .main-content {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 48px 24px;
+        }
+
+        /* 上传区域 */
+        .upload-box {
+            background: var(--bg-secondary);
+            border: 2px dashed var(--border);
+            border-radius: 16px;
+            padding: 64px 48px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .upload-box:hover {
+            border-color: var(--accent);
+            background: #FFFCFA;
+        }
+
+        .upload-box.dragover {
+            border-color: var(--accent);
+            background: #FFF8F5;
+        }
+
+        .upload-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 24px;
+            background: var(--bg-tertiary);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-icon i {
+            font-size: 36px;
+            color: var(--accent);
+        }
+
+        .upload-box h2 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        .upload-box p {
+            font-size: 16px;
+            color: var(--text-muted);
+            margin-bottom: 28px;
+        }
+
+        .upload-box .btn {
+            padding: 14px 28px;
+            font-size: 16px;
+        }
+
+        /* 文件已选择 */
+        .file-selected {
+            background: #F0FDF4;
+            border: 1px solid #BBF7D0;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-top: 24px;
+            display: none;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-selected.show { display: flex; }
+
+        .file-selected i {
+            color: var(--success);
+            font-size: 22px;
+        }
+
+        .file-selected span {
+            flex: 1;
+            font-size: 15px;
+            color: #166534;
+            font-weight: 500;
+        }
+
+        /* 加载状态 */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.show { display: block; }
+
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading p {
+            font-size: 16px;
+            color: var(--text-secondary);
+        }
+
+        /* 结果卡片 */
+        .result-box {
+            background: #F0FDF4;
+            border: 1px solid #BBF7D0;
+            border-radius: 16px;
+            padding: 32px;
+            margin-top: 32px;
+            display: none;
+        }
+
+        .result-box.show { display: block; }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .result-header i {
+            font-size: 28px;
+            color: var(--success);
+        }
+
+        .result-header h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #166534;
+        }
+
+        .result-info {
+            background: rgba(255,255,255,0.7);
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            font-size: 15px;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .result-row:last-child { border-bottom: none; }
+
+        .result-label { color: var(--text-muted); }
+        .result-value { font-weight: 500; color: var(--text-primary); }
+
+        .result-actions {
+            display: flex;
+            gap: 16px;
+        }
+
+        .result-actions button,
+        .result-actions a {
+            flex: 1;
+            padding: 14px;
+            font-size: 15px;
+        }
+
+        /* 使用说明 */
+        .guide {
+            margin-top: 48px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+        }
+
+        .guide h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+
+        .guide-list {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        .guide-item {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 20px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .guide-num {
+            width: 32px;
+            height: 32px;
+            background: var(--accent);
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto;
+        }
+
+        .guide-item h5 {
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .guide-item p {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .guide-item a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .guide-item a:hover { text-decoration: underline; }
+
+        /* 右侧抽屉 */
+        .drawer-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.3);
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            z-index: 200;
+        }
+
+        .drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100vh;
+            background: var(--bg-secondary);
+            box-shadow: -4px 0 20px rgba(0,0,0,0.1);
+            transition: right 0.3s ease;
+            z-index: 201;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .drawer.open { right: 0; }
+
+        .drawer-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .drawer-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .drawer-close {
+            width: 36px;
+            height: 36px;
+            border: none;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.15s;
+        }
+
+        .drawer-close:hover {
+            background: var(--border);
+            color: var(--text-primary);
+        }
+
+        .drawer-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .file-card {
+            background: var(--bg-tertiary);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+
+        .file-card-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            word-break: break-all;
+        }
+
+        .file-card-meta {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+        }
+
+        .file-card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .file-card-actions button {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 13px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .file-card-actions button:hover {
+            border-color: var(--text-muted);
+            color: var(--text-primary);
+        }
+
+        .file-card-actions .btn-delete:hover {
+            border-color: var(--error);
+            color: var(--error);
+            background: #FEF2F2;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 24px;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 40px;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+
+        .empty-state p { font-size: 14px; }
+
+        /* Toast */
+        .toast-container {
+            position: fixed;
+            top: 80px;
+            right: 24px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 14px 18px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.25s ease;
+            min-width: 280px;
+        }
+
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.error { border-left: 3px solid var(--error); }
+
+        .toast i { font-size: 18px; }
+        .toast.success i { color: var(--success); }
+        .toast.error i { color: var(--error); }
+
+        .toast span { flex: 1; font-size: 14px; color: var(--text-primary); }
+
+        .toast button {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        /* 响应式 */
+        @media (max-width: 900px) {
+            .guide-list { grid-template-columns: repeat(2, 1fr); }
+            .drawer { width: 100%; right: -100%; }
+        }
+
+        @media (max-width: 600px) {
+            .navbar { padding: 12px 16px; }
+            .navbar h1 { font-size: 16px; }
+            .main-content { padding: 24px 16px; }
+            .upload-box { padding: 40px 24px; }
+            .upload-box h2 { font-size: 20px; }
+            .guide-list { grid-template-columns: 1fr; }
+            .result-actions { flex-direction: column; }
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar">
+        <h1>基金结构图生成</h1>
+        <div class="navbar-actions">
+            <a href="/static/产品结构图模板.xlsx" class="btn" download>
+                <i class="fas fa-download"></i> 下载模板
+            </a>
+            <button class="btn" onclick="toggleDrawer()">
+                <i class="fas fa-history"></i> 历史文件
+            </button>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- 右侧抽屉 -->
+    <div class="drawer-overlay" onclick="toggleDrawer()"></div>
+    <div class="drawer">
+        <div class="drawer-header">
+            <h2>历史生成文件</h2>
+            <button class="drawer-close" onclick="toggleDrawer()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="drawer-content" id="fileList">
+            <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <p>暂无历史文件</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toastContainer"></div>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <script>
+    function toggleDrawer() {
+        document.querySelector('.drawer').classList.toggle('open');
+        document.querySelector('.drawer-overlay').classList.toggle('open');
+    }
+
+    /* ── Draw.io 嵌入编辑器 ── */
+    function openDrawioEditor(filename) {
+        fetch('/api/get_xml/' + encodeURIComponent(filename))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.error) { showToast(data.error, 'error'); return; }
+                launchDrawioEditor(data.xml, filename);
+            })
+            .catch(function(e) { showToast('加载文件失败: ' + e.message, 'error'); });
+    }
+
+    function launchDrawioEditor(xmlData, filename) {
+        var iframe = document.createElement('iframe');
+        iframe.id = 'drawio-editor';
+        iframe.src = 'https://embed.diagrams.net/?embed=1&proto=json&spin=1&saveAndExit=1&lang=zh';
+        iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;border:0;z-index:9999;background:#fff;';
+        // 添加这两行以允许内嵌页面触发下载（解决导出 PDF 失效的问题）
+        iframe.setAttribute('allow', 'downloads');
+        iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-downloads allow-popups allow-modals');
+        document.body.appendChild(iframe);
+
+        function handleMessage(evt) {
+            if (evt.origin !== 'https://embed.diagrams.net') return;
+            var msg;
+            try { msg = JSON.parse(evt.data); } catch(e) { return; }
+
+            if (msg.event === 'init') {
+                iframe.contentWindow.postMessage(JSON.stringify({
+                    action: 'load',
+                    xml: xmlData
+                }), '*');
+            } else if (msg.event === 'export') {
+                var format = msg.format || 'pdf';
+                var name = (msg.message && msg.message.name) ? msg.message.name : filename.split('.')[0];
+                var data = msg.data;
+                // create an invisible link to click
+                var a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = data;
+                a.download = name + '.' + format;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => document.body.removeChild(a), 100);
+            } else if (msg.event === 'save') {
+                fetch('/api/save_xml/' + encodeURIComponent(filename), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ xml: msg.xml })
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success) {
+                        showToast('保存成功', 'success');
+                        iframe.contentWindow.postMessage(JSON.stringify({
+                            action: 'status', modified: false
+                        }), '*');
+                    } else {
+                        showToast('保存失败: ' + d.error, 'error');
+                    }
+                });
+            } else if (msg.event === 'exit') {
+                document.body.removeChild(iframe);
+                window.removeEventListener('message', handleMessage);
+                if (typeof loadFileList === 'function') loadFileList();
+            }
+        }
+
+        window.addEventListener('message', handleMessage);
+    }
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+
+</html>

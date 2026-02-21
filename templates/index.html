@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="upload-box" id="uploadArea">
+    <div class="upload-icon">
+        <i class="fas fa-cloud-upload-alt"></i>
+    </div>
+    <h2>上传 Excel 文件</h2>
+    <p>拖拽文件到这里，或点击下方按钮选择文件</p>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
+    <button type="button" class="btn btn-primary" id="selectFileBtn">
+        <i class="fas fa-folder-open"></i> 选择文件
+    </button>
+</div>
+
+<div class="file-selected" id="fileInfo">
+    <i class="fas fa-file-excel"></i>
+    <span id="fileName"></span>
+</div>
+
+<div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>正在生成结构图，请稍候...</p>
+</div>
+
+<div class="result-box" id="resultCard">
+    <div class="result-header">
+        <i class="fas fa-check-circle"></i>
+        <h3>生成成功</h3>
+    </div>
+    <div class="result-info" id="resultInfo"></div>
+    <div class="result-actions">
+        <button type="button" class="btn btn-primary" id="editLatestBtn">
+            <i class="fas fa-edit"></i> 在线编辑
+        </button>
+        <button type="button" class="btn btn-success" id="downloadLatestBtn">
+            <i class="fas fa-download"></i> 下载文件
+        </button>
+    </div>
+</div>
+
+<div class="guide">
+    <h3>使用说明</h3>
+    <div class="guide-list">
+        <div class="guide-item">
+            <div class="guide-num">1</div>
+            <h5>下载模板</h5>
+            <p>点击右上角下载 Excel 模板</p>
+        </div>
+        <div class="guide-item">
+            <div class="guide-num">2</div>
+            <h5>填写数据</h5>
+            <p>按模板格式填写基金和投资者信息</p>
+        </div>
+        <div class="guide-item">
+            <div class="guide-num">3</div>
+            <h5>上传生成</h5>
+            <p>上传 Excel 自动生成结构图</p>
+        </div>
+        <div class="guide-item">
+            <div class="guide-num">4</div>
+            <h5>编辑导出</h5>
+            <p>点击「在线编辑」直接编辑并导出</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        initUpload();
+        loadFileList();
+    });
+
+    let isGenerating = false;
+
+    function initUpload() {
+        const area = document.getElementById('uploadArea');
+        const input = document.getElementById('fileInput');
+
+        area.addEventListener('dragover', e => { e.preventDefault(); area.classList.add('dragover'); });
+        area.addEventListener('dragleave', e => { e.preventDefault(); area.classList.remove('dragover'); });
+        area.addEventListener('drop', e => {
+            e.preventDefault();
+            area.classList.remove('dragover');
+            if (isGenerating) return;
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+        area.addEventListener('click', e => { if (!e.target.closest('#selectFileBtn') && !isGenerating) input.click(); });
+        document.getElementById('selectFileBtn').addEventListener('click', e => { e.stopPropagation(); if (!isGenerating) input.click(); });
+        input.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+    }
+
+    function handleFile(file) {
+        if (isGenerating) { showToast('正在生成，请稍候...', 'error'); return; }
+        if (!file.name.match(/\.xlsx?$/i)) { showToast('请选择 Excel 文件', 'error'); return; }
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileInfo').classList.add('show');
+        window.selectedFile = file;
+        setTimeout(generate, 300);
+    }
+
+    function setGenerateUI(busy) {
+        const input = document.getElementById('fileInput');
+        const area = document.getElementById('uploadArea');
+        const btn = document.getElementById('selectFileBtn');
+        input.disabled = busy;
+        btn.disabled = busy;
+        area.style.pointerEvents = busy ? 'none' : 'auto';
+        area.style.opacity = busy ? '0.7' : '1';
+    }
+
+    function generate() {
+        if (!window.selectedFile || isGenerating) return;
+        isGenerating = true;
+        setGenerateUI(true);
+        const fd = new FormData();
+        fd.append('file', window.selectedFile);
+        document.getElementById('loading').classList.add('show');
+        document.getElementById('resultCard').classList.remove('show');
+
+        fetch('/upload', { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('loading').classList.remove('show');
+                isGenerating = false;
+                setGenerateUI(false);
+                if (d.success) { showResult(d); loadFileList(); showToast('生成成功', 'success'); }
+                else showToast('失败: ' + d.error, 'error');
+            })
+            .catch(e => {
+                document.getElementById('loading').classList.remove('show');
+                isGenerating = false;
+                setGenerateUI(false);
+                showToast('失败: ' + e.message, 'error');
+            });
+    }
+
+    function showResult(d) {
+        document.getElementById('resultInfo').innerHTML = `
+        <div class="result-row"><span class="result-label">产品名称</span><span class="result-value">${d.chart_title}</span></div>
+        <div class="result-row"><span class="result-label">基金名称</span><span class="result-value">${d.fund_name}</span></div>
+        <div class="result-row"><span class="result-label">投资者数量</span><span class="result-value">${d.investor_count} 个</span></div>
+    `;
+        document.getElementById('downloadLatestBtn').onclick = () => window.open('/download/' + d.drawio_file, '_blank');
+        document.getElementById('editLatestBtn').onclick = () => openDrawioEditor(d.drawio_file);
+        document.getElementById('resultCard').classList.add('show');
+    }
+
+    function loadFileList() {
+        fetch('/api/list_files').then(r => r.json()).then(d => {
+            const el = document.getElementById('fileList');
+            if (d.files && d.files.length) {
+                el.innerHTML = d.files.map(f => `
+                <div class="file-card">
+                    <div class="file-card-name">${f.filename}</div>
+                    <div class="file-card-meta">${f.modified} · ${(f.size / 1024).toFixed(1)} KB</div>
+                    <div class="file-card-actions">
+                        <button onclick="openDrawioEditor('${f.filename}')"><i class="fas fa-edit"></i> 编辑</button>
+                        <button onclick="downloadFile('${f.filename}')"><i class="fas fa-download"></i> 下载</button>
+                        <button class="btn-delete" onclick="deleteFile('${f.filename}')"><i class="fas fa-trash"></i> 删除</button>
+                    </div>
+                </div>
+            `).join('');
+            } else {
+                el.innerHTML = '<div class="empty-state"><i class="fas fa-folder-open"></i><p>暂无历史文件</p></div>';
+            }
+        });
+    }
+
+    function downloadFile(f) { window.open('/download/' + f, '_blank'); }
+
+    function deleteFile(f) {
+        if (!confirm('确定删除 "' + f + '"?')) return;
+        fetch('/api/delete/' + f, { method: 'DELETE' }).then(r => r.json()).then(d => {
+            if (d.success) { showToast('已删除', 'success'); loadFileList(); }
+            else showToast('删除失败', 'error');
+        });
+    }
+
+    function showToast(msg, type) {
+        const c = document.getElementById('toastContainer');
+        const t = document.createElement('div');
+        t.className = 'toast ' + type;
+        t.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i><span>${msg}</span><button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>`;
+        c.appendChild(t);
+        setTimeout(() => t.remove(), 3000);
+    }
+</script>
+{% endblock %}
